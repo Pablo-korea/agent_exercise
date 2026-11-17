@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "qa-bug-hunter@anthropic-plugin-directory": false
+  }
+}

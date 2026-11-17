@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보험심사 Agent</title>
+<style>
+  /* ===== 색상/공통 변수 ===== */
+  :root {
+    --bg: #070b16; --panel: #0e1526; --panel2: #0a1020; --line: #1f2b45;
+    --text: #e2e8f0; --muted: #8a99b8; --accent: #6366f1; --accent2: #22d3ee;
+    --me: #4f46e5; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --info: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+    font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif; color: var(--text);
+    background:
+      radial-gradient(900px 500px at 10% -10%, rgba(99,102,241,.28), transparent 60%),
+      radial-gradient(800px 500px at 100% 110%, rgba(34,211,238,.16), transparent 60%),
+      var(--bg);
+  }
+  [hidden] { display: none !important; }
+
+  /* ===== 버튼 / 입력 공통 ===== */
+  button {
+    font: inherit; font-size: 13px; padding: 8px 14px; border-radius: 10px; cursor: pointer; color: var(--text);
+    background: #16213a; border: 1px solid var(--line); transition: transform .1s, opacity .2s, border-color .2s; white-space: nowrap;
+  }
+  button:hover { border-color: #3b4f7a; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { border: 0; color: #fff; font-weight: 600; background: linear-gradient(135deg, var(--accent), #8b5cf6); }
+  button.primary:hover { transform: translateY(-1px); }
+  button.danger { color: var(--bad); border-color: #5b2330; }
+  button.sm { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+  input, textarea, select {
+    font: inherit; font-size: 14px; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; outline: none; width: 100%;
+  }
+  input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,.25); }
+  textarea { resize: vertical; min-height: 78px; }
+
+  /* ===== 상단 헤더 ===== */
+  header { padding: 10px 24px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); backdrop-filter: blur(6px); }
+  .logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; font-size: 19px;
+          background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 0 20px rgba(99,102,241,.5); }
+  header h1 { margin: 0; font-size: 17px; letter-spacing: .02em; }
+  header small { color: var(--muted); display: block; font-size: 11.5px; margin-top: 2px; }
+  .tabs { display: flex; gap: 6px; margin-left: 22px; }
+  .tab { padding: 8px 16px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: var(--muted); font-weight: 600; }
+  .tab.on { color: #fff; background: rgba(99,102,241,.22); border-color: #3d4390; }
+  .live-dot { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .live-dot i { width: 8px; height: 8px; border-radius: 50%; background: #475569; }
+  .live-dot.on { color: var(--ok); }
+  .live-dot.on i { background: var(--ok); box-shadow: 0 0 10px var(--ok); animation: blink 1s infinite; }
+
+  /* ===== 공통 패널 ===== */
+  main { flex: 1; min-height: 0; display: flex; gap: 14px; padding: 14px 24px; }
+  section, aside {
+    min-width: 0; min-height: 0; display: flex; flex-direction: column;
+    background: rgba(14,21,38,.85); border: 1px solid var(--line); border-radius: 16px;
+    padding: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.4);
+  }
+  h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); letter-spacing: .06em; }
+  .box { flex: 1; min-height: 0; overflow: auto; background: var(--panel2); border-radius: 12px; padding: 12px; }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; margin-top: 30px; line-height: 1.7; }
+
+  /* ===== 사건 목록(왼쪽) ===== */
+  #caseSec { flex: 0 0 236px; }
+  .side-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .side-head h3 { margin: 0; }
+  #newCase { width: 100%; margin-bottom: 10px; padding: 10px; }
+  .filters { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+  .fchip { padding: 3px 9px; font-size: 11.5px; border-radius: 999px; color: var(--muted); }
+  .fchip.on { color: #fff; background: rgba(99,102,241,.25); border-color: #3d4390; }
+  #caseList { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+  .case {
+    display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel2); transition: border-color .2s, background .2s; position: relative;
+  }
+  .case:hover { border-color: #3b4f7a; }
+  .case.on { border-color: var(--accent); background: rgba(99,102,241,.14); }
+  .case .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); }
+  .case.running .dot { animation: blink 1s infinite; }
+  .case .ct { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .case .cm { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .case .info { min-width: 0; flex: 1; }
+  .case .x { flex: none; padding: 2px 7px; font-size: 11px; opacity: 0; }
+  .case:hover .x { opacity: 1; }
+  .foot-note { font-size: 10.5px; color: #5d6d92; line-height: 1.5; margin-top: 10px; }
+
+  /* ===== 채팅 ===== */
+  #chatSec { flex: 4; }
+  .chat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-height: 28px; }
+  .chat-head h3 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .schip { flex: none; font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; color: #07101f; background: var(--c); }
+  .msg { max-width: 88%; margin: 0 0 10px; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap;
+         line-height: 1.55; font-size: 14px; animation: pop .2s ease; }
+  .msg.me { margin-left: auto; background: var(--me); border-bottom-right-radius: 4px; }
+  .msg.bot { background: #1b2740; border-bottom-left-radius: 4px; }
+  .msg .who { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .msg.me .who { color: #c7d2fe; }
+  /* AI 결론 아래 "처리 상태" 선택 */
+  .statusbar { margin-top: 10px; padding-top: 9px; border-top: 1px dashed rgba(148,163,184,.25); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; white-space: normal; }
+  .statusbar > span { font-size: 11.5px; color: var(--muted); margin-right: 2px; }
+  .sbtn { padding: 4px 11px; font-size: 12px; border-radius: 999px; }
+  .sbtn.on { color: #07101f; font-weight: 700; background: var(--c); border-color: var(--c); }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .input-row { display: flex; gap: 8px; margin-top: 12px; }
+
+  /* ===== 협의 그래프 영역 ===== */
+  #graphSec { flex: 6; }
+  .toolbar { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 8px 14px; flex-wrap: wrap; margin-bottom: 8px; }
+  .hud { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 11px; padding: 4px 10px; border-radius: 999px; color: var(--muted); background: rgba(10,16,32,.75); border: 1px solid var(--line); }
+  .chip b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .chip.ok { color: var(--ok); border-color: #166534; }
+  .chip.warn { color: #fb923c; border-color: #9a3412; }
+  .chip.run { color: #22d3ee; border-color: #155e75; }
+  .legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--c);
+                         margin-right: 5px; vertical-align: middle; box-shadow: 0 0 6px var(--c); }
+  .graph-box {
+    position: relative; flex: 1; min-height: 260px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line);
+    background:
+      linear-gradient(rgba(34,211,238,.05) 1px, transparent 1px) 0 0 / 32px 32px,
+      linear-gradient(90deg, rgba(34,211,238,.05) 1px, transparent 1px) 0 0 / 32px 32px,
+      radial-gradient(circle at 50% 45%, #0f1c36 0%, var(--panel2) 70%);
+    animation: gridmove 12s linear infinite;
+  }
+  @keyframes gridmove { to { background-position: 32px 32px, 32px 32px, 0 0; } }
+  #graph { width: 100%; height: 100%; display: block; }
+  .ticker { flex: none; margin-top: 8px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px;
+            font-size: 12.5px; min-height: 36px; background: rgba(7,11,22,.8); border: 1px solid var(--line); }
+  .ticker .who { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #07101f; background: var(--c, #64748b); white-space: nowrap; }
+  .ticker .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ===== SVG 노드 / 엣지 ===== */
+  .node .core { fill: #0b1426; stroke: var(--c); stroke-width: 2; transition: all .3s; }
+  .node .icon { font-size: 30px; text-anchor: middle; dominant-baseline: central; transition: opacity .3s; }
+  .node:not(.working) .icon { opacity: .7; }
+  .node .name { fill: var(--text); font-size: 13px; font-weight: 700; text-anchor: middle; }
+  .node .role { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+  .node .ring { fill: none; stroke: var(--c); stroke-width: 1.5; stroke-dasharray: 5 7; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .node .pulse { fill: var(--c); opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .node.working .core { fill: #10203d; stroke-width: 3.5; filter: drop-shadow(0 0 12px var(--c)); }
+  .node.working .ring { opacity: .95; animation: spin 7s linear infinite; }
+  .node.working .pulse { animation: ping 1.7s ease-out infinite; }
+  .node .badge rect { fill: #0b1426; stroke: var(--bc, #334155); stroke-width: 1; transition: all .3s; }
+  .node .badge text { fill: var(--bc, #94a3b8); font-size: 10.5px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes ping { 0% { transform: scale(1); opacity: .4; } 100% { transform: scale(1.95); opacity: 0; } }
+  @keyframes blink { 50% { opacity: .25; } }
+  .edge { fill: none; stroke-width: 2.5; stroke-linecap: round; opacity: .3; transition: opacity .4s; }
+  .edge.live { opacity: 1; stroke-dasharray: 7 7; animation: flow .7s linear infinite; filter: drop-shadow(0 0 5px currentColor); }
+  @keyframes flow { to { stroke-dashoffset: -14; } }
+  .elabel { transition: opacity .4s; opacity: .55; }
+  .elabel.live { opacity: 1; }
+  .elabel rect { fill: #0a1020; stroke: var(--c); stroke-width: 1; }
+  .elabel text { fill: var(--c); font-size: 10px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+  .particle { filter: drop-shadow(0 0 4px currentColor); }
+  .mesh-fill { fill: rgba(99,102,241,.06); stroke: none; }
+  .mesh-line { stroke: #3b4a6b; stroke-width: 1; stroke-dasharray: 2 6; opacity: .7; }
+  .mesh-title { fill: #7f92bb; font-size: 12px; font-weight: 800; letter-spacing: .16em; text-anchor: middle; }
+  .mesh-sub { fill: #51618a; font-size: 9.5px; text-anchor: middle; }
+
+  /* ===== 로그 ===== */
+  #logBox { flex: none; height: 17%; min-height: 80px; margin-top: 10px; }
+  #log { font-family: Consolas, monospace; font-size: 12px; line-height: 1.6; color: #a5b4fc; }
+  #log div { padding: 2px 0; border-bottom: 1px dashed rgba(148,163,184,.13); animation: pop .2s ease; }
+  #log div::before { content: "› "; color: var(--accent2); }
+  #log div.sep { color: var(--muted); text-align: center; border: 0; }
+  #log div.sep::before { content: ""; }
+
+  /* ===== Agent 관리 탭 ===== */
+  #viewAgents { gap: 14px; overflow: auto; }
+  #agentCol { flex: 6; overflow: auto; }
+  #docCol { flex: 4; overflow: auto; }
+  .banner { padding: 10px 14px; border-radius: 12px; font-size: 12.5px; line-height: 1.6; margin-bottom: 12px; border: 1px solid; }
+  .banner.mesh { color: #a5f3fc; border-color: #155e75; background: rgba(34,211,238,.07); }
+  .banner.local { color: #fde68a; border-color: #854d0e; background: rgba(251,191,36,.07); }
+  .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+  .sec-head h2 { margin: 0; font-size: 15px; }
+  .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .acard { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--panel2);
+           border: 1px solid var(--line); position: relative; overflow: hidden; }
+  .acard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); box-shadow: 0 0 12px var(--c); }
+  .acard .top { display: flex; align-items: center; gap: 10px; }
+  .avatar { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-size: 23px;
+            background: #0b1426; border: 2px solid var(--c); box-shadow: 0 0 14px color-mix(in srgb, var(--c) 40%, transparent); }
+  .acard b { font-size: 14px; }
+  .acard .role { font-size: 12px; color: var(--c); font-weight: 700; }
+  .acard .desc { font-size: 12px; color: var(--muted); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 3.1em; }
+  .acard .btns { display: flex; gap: 6px; margin-top: auto; }
+  .tag { display: inline-block; font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .tag.doc { color: #fde68a; border-color: #854d0e; }
+  .tag.base { color: #c7d2fe; border-color: #3d4390; }
+  .addcard { align-items: center; justify-content: center; cursor: pointer; border-style: dashed; color: var(--muted); min-height: 150px; font-size: 13px; }
+  .addcard:hover { border-color: var(--accent); color: var(--text); }
+  .addcard .plus { font-size: 28px; line-height: 1; }
+  .mini { width: 100%; height: 190px; margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+  .dropzone { border: 2px dashed #2b3a5e; border-radius: 14px; padding: 18px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; line-height: 1.7; margin-bottom: 12px; }
+  .dropzone:hover, .dropzone.over { border-color: var(--accent); color: var(--text); background: rgba(99,102,241,.07); }
+  .doc { padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2); margin-bottom: 10px; }
+  .doc .dh { display: flex; align-items: center; gap: 8px; }
+  .doc .dn { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc .dm { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .doc .prev { font-size: 11.5px; color: #7c8cb0; margin-top: 8px; line-height: 1.5; max-height: 3.2em; overflow: hidden; }
+  .link-label { font-size: 11px; color: var(--muted); margin: 10px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lchip { padding: 4px 10px; font-size: 12px; border-radius: 999px; color: var(--muted); }
+  .lchip.on { color: #07101f; font-weight: 700; background: var(--c); border-color: var(--c); }
+
+  /* ===== 모달(dialog) ===== */
+  dialog { color: var(--text); background: var(--panel); border: 1px solid #2b3a5e; border-radius: 16px; padding: 0; width: min(520px, 92vw); box-shadow: 0 20px 70px rgba(0,0,0,.7); }
+  dialog::backdrop { background: rgba(3,6,14,.72); backdrop-filter: blur(3px); }
+  .dlg { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .dlg h2 { margin: 0 0 2px; font-size: 16px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .field small { color: #5d6d92; font-size: 11px; }
+  .pick { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pick button { width: 38px; height: 38px; padding: 0; font-size: 19px; border-radius: 10px; }
+  .pick button.on { border-color: var(--accent); background: rgba(99,102,241,.25); }
+  .pick.colors button { width: 28px; height: 28px; border-radius: 50%; background: var(--c); border: 2px solid transparent; }
+  .pick.colors button.on { border-color: #fff; }
+  .dlg .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .err { color: var(--bad); font-size: 12.5px; min-height: 1.2em; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 50; padding: 10px 18px; border-radius: 12px;
+           background: #16213a; border: 1px solid #3b4f7a; font-size: 13px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+
+  @media (max-width: 1100px) { #caseSec { flex-basis: 200px; } }
+  @media (max-width: 900px) {
+    body { overflow: auto; height: auto; min-height: 100vh; }
+    main { flex-direction: column; overflow: visible; }
+    #graphSec { min-height: 560px; } #chatSec { min-height: 420px; } #caseSec { flex: none; max-height: 260px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🛡️</div>
+  <div>
+    <h1>보험심사 Agent</h1>
+    <small>법률 · 경영 · 고객 전문가가 협의하는 보험금 지급 판단 보조 (법적 효력 없는 참고용)</small>
+  </div>
+  <nav class="tabs">
+    <button class="tab on" id="tabChat">⚖️ 심사 협의</button>
+    <button class="tab" id="tabAgents">🧩 Agent 관리</button>
+  </nav>
+  <div class="live-dot" id="liveDot"><i></i><span id="liveText">대기 중</span></div>
+</header>
+
+<!-- ================= 탭 1: 심사 협의 ================= -->
+<main id="viewChat">
+  <!-- 사건(대화) 목록: 하나의 대화 = 하나의 사건 -->
+  <aside id="caseSec">
+    <div class="side-head"><h3>🗂️ 사건 목록 <span id="caseCount"></span></h3></div>
+    <button class="primary" id="newCase">＋ 새 대화</button>
+    <div class="filters" id="filters"></div>
+    <div id="caseList"></div>
+    <div class="foot-note">대화 하나가 사건 하나입니다. 사건마다 Agent 기억이 따로 쌓이며, 페이지를 새로고침하면 목록과 기억이 모두 초기화됩니다.</div>
+  </aside>
+
+  <section id="chatSec">
+    <div class="chat-head"><h3 id="caseTitle">💬 새 사건</h3><span class="schip" id="caseChip"></span></div>
+    <div id="chat" class="box"></div>
+    <div class="input-row">
+      <input id="msg" placeholder="사고·계약·고객 상황을 입력하세요">
+      <button class="primary" id="send">보내기</button>
+    </div>
+  </section>
+
+  <section id="graphSec">
+    <h3>🕸️ A2A Full-Mesh 협의 그래프 — 전문가가 서로 직접 소통 (실시간)</h3>
+    <div class="toolbar">
+      <div class="hud">
+        <span class="chip run">⏱ <b id="timeVal">00:00</b></span>
+        <span class="chip" id="chipRound">협의 <b id="roundVal">대기</b></span>
+        <span class="chip">A2A 메시지 <b id="meshVal">0</b></span>
+        <span class="chip ok">동의 <b id="agreeVal">0</b></span>
+        <span class="chip warn">이견 <b id="dissentVal">0</b></span>
+        <span class="chip">로그 <b id="evVal">0</b></span>
+      </div>
+      <div class="legend">
+        <span style="--c:#22d3ee">요청/호출</span><span style="--c:#4ade80">동의</span>
+        <span style="--c:#fb923c">이견</span><span style="--c:#f0abfc">결과</span>
+      </div>
+    </div>
+    <div class="graph-box"><svg id="graph" viewBox="0 0 720 480" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div class="ticker"><span class="who" id="tickWho">READY</span><span class="txt" id="tickTxt"></span></div>
+    <h3 style="margin-top:12px">📜 처리 로그</h3>
+    <div id="logBox" class="box"><div id="log"></div></div>
+  </section>
+</main>
+
+<!-- ================= 탭 2: Agent 관리 ================= -->
+<main id="viewAgents" hidden>
+  <section id="agentCol">
+    <div class="banner local" id="localBanner" hidden>
+      ⚠️ 백엔드 <code>/api/agents</code> 가 아직 없어 <b>임시 로컬 모드</b>로 동작합니다. 여기서 바꾼 Agent·약관은 이 화면에서만 유지되고 실제 Agent 답변에는 반영되지 않습니다.
+    </div>
+    <div class="banner mesh">🔗 모든 전문가 Agent는 <b>항상 Full-Mesh</b> 로 연결됩니다. 새로 추가한 Agent도 자동으로 나머지 전문가 모두와 직접 의견을 주고받으며, 연결을 따로 설정하지 않습니다.</div>
+    <div class="sec-head"><h2>🧩 Agent 관리</h2><button class="primary" id="addAgent">＋ Agent 추가</button></div>
+    <div class="agent-grid" id="agentGrid"></div>
+    <svg class="mini" id="miniMesh" viewBox="0 0 660 210" preserveAspectRatio="xMidYMid meet"></svg>
+  </section>
+  <section id="docCol">
+    <div class="sec-head"><h2>📚 약관 문서</h2><button class="primary" id="addDoc">＋ 약관 업로드</button></div>
+    <div class="dropzone" id="dropzone">약관 파일을 여기로 끌어다 놓거나 클릭해서 선택<br><small>.txt · .md · .pdf · .docx / 최대 5MB — 업로드 후 참고할 Agent를 선택합니다</small></div>
+    <div id="docList"></div>
+  </section>
+</main>
+
+<!-- Agent 추가/수정 -->
+<dialog id="agentDlg">
+  <form method="dialog" class="dlg" id="agentForm" onsubmit="return false">
+    <h2 id="agentDlgTitle">Agent 추가</h2>
+    <div class="field"><label>이름 (영문·숫자, 변경 불가) <small>예: TaxReview — Agent 기억 칸을 나누는 기준입니다</small></label><input id="fName" maxlength="24" autocomplete="off"></div>
+    <div class="field"><label>역할 이름 <small>화면에 표시됩니다 (예: 세무 전문가)</small></label><input id="fRole" maxlength="20" autocomplete="off"></div>
+    <div class="field"><label>역할 지침 <small>이 Agent가 어떤 관점으로 검토할지</small></label><textarea id="fPrompt" maxlength="400"></textarea></div>
+    <div class="field"><label>아이콘</label><div class="pick" id="fIcons"></div></div>
+    <div class="field"><label>색상</label><div class="pick colors" id="fColors"></div></div>
+    <div class="err" id="agentErr"></div>
+    <div class="row"><button type="button" id="agentCancel">취소</button><button type="submit" class="primary" id="agentSave">저장</button></div>
+  </form>
+</dialog>
+
+<!-- 약관 업로드 -->
+<dialog id="docDlg">
+  <form method="dialog" class="dlg" onsubmit="return false">
+    <h2>약관 문서 업로드</h2>
+    <div class="field"><label>파일 (.txt .md .pdf .docx, 5MB 이하)</label><input type="file" id="docFile" accept=".txt,.md,.pdf,.docx"></div>
+    <div class="field"><label>이 약관을 참고할 Agent 선택</label><div class="chips" id="docAgents"></div></div>
+    <div class="err" id="docErr"></div>
+    <div class="row"><button type="button" id="docCancel">취소</button><button type="submit" class="primary" id="docSave">업로드</button></div>
+  </form>
+</dialog>
+
+<!-- 삭제 확인 -->
+<dialog id="confirmDlg">
+  <form method="dialog" class="dlg" onsubmit="return false">
+    <h2 id="confirmTitle">삭제할까요?</h2>
+    <div id="confirmText" style="font-size:13.5px;line-height:1.6;color:var(--muted)"></div>
+    <div class="row"><button type="button" id="confirmNo">취소</button><button type="submit" class="danger" id="confirmYes">삭제</button></div>
+  </form>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+// 화면 요소를 안전하게 만드는 도우미 (textContent 만 사용 → XSS 방지)
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in props) {
+    if (props[k] === null || props[k] === undefined || props[k] === false) continue;   // null 은 "속성 없음" (disabled 같은 속성이 잘못 켜지지 않게)
+    if (k === "class") e.className = props[k];
+    else if (k === "style") e.style.cssText = props[k];
+    else if (k.startsWith("on")) e[k] = props[k];
+    else e.setAttribute(k, props[k]);
+  }
+  kids.flat().forEach((c) => { if (c !== null && c !== undefined && c !== false) e.append(c); });
+  return e;
+}
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+const fmtSize = (b) => b < 1024 ? b + "B" : b < 1048576 ? (b / 1024).toFixed(1) + "KB" : (b / 1048576).toFixed(1) + "MB";
+function toast(text) {
+  document.querySelectorAll(".toast").forEach((x) => x.remove());   // 알림은 한 번에 하나만
+  const t = h("div", {class: "toast"}, text); document.body.append(t); setTimeout(() => t.remove(), 2600);
+}
+
+/* =====================================================================
+   1) 데이터: Agent 와 약관 문서
+   - 서버의 /api/agents, /api/documents 가 있으면 그것을 쓰고,
+   - 아직 없으면(404) "임시 로컬 모드" 로 화면 안에서만 관리한다.
+   ===================================================================== */
+const state = {agents: [], docs: []};
+const DEFAULT_AGENTS = [
+  {name: "Orchestrator", kind: "orchestrator", role: "심사팀장", icon: "🧑‍💼", color: "#a78bfa", builtin: true, prompt: "입력 해석, 협의 진행, 쟁점 정리, 최종 결론 작성"},
+  {name: "LegalReview", kind: "expert", role: "법률 전문가", icon: "⚖️", color: "#38bdf8", builtin: true, prompt: "약관 해석, 관련 법령·판례, 면책/지급 사유 검토"},
+  {name: "CEO", kind: "expert", role: "경영 전문가", icon: "📊", color: "#fbbf24", builtin: true, prompt: "지급 시 재무 영향, 손해율, 리스크, 선례 일관성 검토"},
+  {name: "CustomerReview", kind: "expert", role: "고객 전문가", icon: "🤝", color: "#34d399", builtin: true, prompt: "고객 입장, 민원·분쟁 가능성, 공정성, 신뢰 영향 검토"},
+];
+const MAX_EXPERTS = 6, MIN_EXPERTS = 2;   // 그래프가 보기 좋은 범위 / Full-Mesh 는 전문가 2명 이상 필요
+const experts = () => state.agents.filter((a) => a.kind !== "orchestrator");
+
+async function jfetch(method, url, body) {
+  const r = await fetch(url, {method, headers: body ? {"Content-Type": "application/json"} : {}, body: body ? JSON.stringify(body) : undefined});
+  if (!r.ok) { let m = r.status + ""; try { m = (await r.json()).detail || m; } catch (e) {} throw new Error(typeof m === "string" ? m : JSON.stringify(m)); }
+  return r.status === 204 ? null : r.json();
+}
+
+const store = {
+  local: false,
+  async init() {
+    try {
+      const a = await fetch("/api/agents");
+      if (!a.ok) throw new Error("no backend");
+      state.agents = (await a.json()).agents;
+      await this.reloadDocs();
+    } catch (e) {
+      this.local = true;                       // 백엔드가 아직 없다 → 화면 안에서만 동작
+      state.agents = structuredClone(DEFAULT_AGENTS);
+      state.docs = [];
+    }
+    $("localBanner").hidden = !this.local;
+  },
+  async reloadDocs() {
+    const d = await fetch("/api/documents");
+    state.docs = d.ok ? (await d.json()).documents : [];
+  },
+  async saveAgent(a, isNew) {
+    if (!this.local) {
+      const saved = await jfetch(isNew ? "POST" : "PUT", isNew ? "/api/agents" : "/api/agents/" + a.name, a);
+      const i = state.agents.findIndex((x) => x.name === saved.name);
+      if (i >= 0) state.agents[i] = saved; else state.agents.push(saved);
+    } else {
+      const i = state.agents.findIndex((x) => x.name === a.name);
+      if (i >= 0) state.agents[i] = {...state.agents[i], ...a}; else state.agents.push({...a, kind: "expert", builtin: false});
+    }
+  },
+  async deleteAgent(name) {
+    if (!this.local) { await jfetch("DELETE", "/api/agents/" + name); await this.reloadDocs(); }
+    state.agents = state.agents.filter((a) => a.name !== name);
+    state.docs.forEach((d) => { d.agents = d.agents.filter((n) => n !== name); });
+  },
+  async uploadDoc(file, agentNames) {
+    if (!this.local) {
+      const fd = new FormData(); fd.append("file", file); fd.append("agents", JSON.stringify(agentNames));
+      const r = await fetch("/api/documents", {method: "POST", body: fd});
+      if (!r.ok) { let m = r.status + ""; try { m = (await r.json()).detail || m; } catch (e) {} throw new Error(m); }
+      state.docs.unshift(await r.json());
+    } else {
+      let preview = "";
+      if (/\.(txt|md)$/i.test(file.name)) preview = (await file.text()).replace(/\s+/g, " ").slice(0, 160);
+      state.docs.unshift({id: uuid(), name: file.name, size: file.size, agents: [...agentNames], preview});
+    }
+  },
+  async linkDoc(doc, agentNames) {
+    if (!this.local) doc.agents = (await jfetch("PUT", "/api/documents/" + doc.id + "/agents", {agents: agentNames})).agents;
+    else doc.agents = agentNames;
+  },
+  async deleteDoc(id) {
+    if (!this.local) await jfetch("DELETE", "/api/documents/" + id);
+    state.docs = state.docs.filter((d) => d.id !== id);
+  },
+};
+
+/* =====================================================================
+   2) 협의 그래프 (SVG) — Agent 목록으로부터 노드를 자동 배치한다
+   - Node = Agent, Edge = Agent 사이의 메시지
+   - 전문가는 원형으로 배치하고, 모두를 서로 점선으로 이어 Full-Mesh 를 보여 준다
+   ===================================================================== */
+const R = 30;  // 노드 반지름
+const KIND = {req: "#22d3ee", agree: "#4ade80", dissent: "#fb923c", result: "#f0abfc"};
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const svg = $("graph");
+let NODES = {}, EXPERTS = [], nodeEls = {}, gMesh, gEdges, gParticles, gNodes, gLabels;
+const edges = new Map();  // "from>to" → 엣지 정보
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Agent 목록 → 노드 위치. 사용자·Orchestrator 는 위쪽, 전문가는 타원 위에 균등 배치
+function layout() {
+  const orch = state.agents.find((a) => a.kind === "orchestrator") || DEFAULT_AGENTS[0];
+  NODES = {
+    User: {x: 100, y: 76, icon: "👤", name: "사용자", role: "질문자", color: "#94a3b8"},
+    Orchestrator: {x: 360, y: 76, icon: orch.icon, name: orch.name, role: orch.role, color: orch.color},
+  };
+  const ex = experts();
+  EXPERTS = ex.map((a) => a.name);
+  ex.forEach((a, i) => {
+    const ang = -Math.PI / 2 + (2 * Math.PI * i) / ex.length;
+    NODES[a.name] = {x: 360 + 215 * Math.cos(ang), y: 295 + 100 * Math.sin(ang), icon: a.icon, name: a.name, role: a.role, color: a.color};
+  });
+}
+
+// 그래프를 처음부터 다시 그린다 (Agent 가 추가/삭제될 때)
+function buildGraph() {
+  svg.innerHTML = ""; edges.clear(); nodeEls = {}; layout();
+  const defs = el("defs", {}, svg);
+  for (const k in KIND) {   // 화살표 머리 (종류별 색)
+    const m = el("marker", {id: "arrow-" + k, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse"}, defs);
+    el("path", {d: "M0,0 L10,5 L0,10 z", fill: KIND[k]}, m);
+  }
+  // 그리는 순서(아래 → 위): 구조(Mesh), 엣지, 흐르는 점, 노드, 엣지 이름표
+  gMesh = el("g", {}, svg); gEdges = el("g", {}, svg); gParticles = el("g", {}, svg); gNodes = el("g", {}, svg); gLabels = el("g", {}, svg);
+  drawMesh();
+  for (const id in NODES) drawNode(id);
+}
+
+// Full-Mesh 구조: 전문가를 잇는 도형 + 모든 쌍의 점선 + 이름표
+function drawMesh() {
+  if (EXPERTS.length > 2) el("polygon", {points: EXPERTS.map((n) => NODES[n].x + "," + NODES[n].y).join(" "), class: "mesh-fill"}, gMesh);
+  EXPERTS.forEach((a, i) => EXPERTS.slice(i + 1).forEach((b) =>
+    el("line", {class: "mesh-line", x1: NODES[a].x, y1: NODES[a].y, x2: NODES[b].x, y2: NODES[b].y}, gMesh)));
+  const line = (a, b) => el("line", {class: "mesh-line", x1: NODES[a].x, y1: NODES[a].y, x2: NODES[b].x, y2: NODES[b].y}, gMesh);
+  line("User", "Orchestrator");
+  EXPERTS.forEach((n) => line("Orchestrator", n));
+  const t = (y, cls, s) => { const e = el("text", {class: cls, x: 620, y}, gMesh); e.textContent = s; };
+  t(112, "mesh-title", "A2A FULL-MESH"); t(129, "mesh-sub", `전문가 ${EXPERTS.length}명이 서로 직접`); t(143, "mesh-sub", "의견을 주고받는 구조");
+}
+
+function drawNode(id) {
+  const n = NODES[id];
+  const g = el("g", {class: "node", style: `--c:${n.color}`, transform: `translate(${n.x},${n.y})`}, gNodes);
+  el("circle", {class: "pulse", r: R}, g);    // 퍼져 나가는 파동
+  el("circle", {class: "ring", r: R + 9}, g); // 빙글 도는 점선 고리
+  el("circle", {class: "core", r: R}, g);
+  el("text", {class: "icon"}, g).textContent = n.icon;
+  el("text", {class: "name", y: R + 17}, g).textContent = n.name;
+  el("text", {class: "role", y: R + 31}, g).textContent = n.role;
+  const badge = el("g", {class: "badge", transform: `translate(0,${R + 46})`}, g);
+  el("rect", {x: -28, y: -9, width: 56, height: 18, rx: 9}, badge);
+  const bt = el("text", {}, badge); bt.textContent = "대기";
+  nodeEls[id] = {g, badge, bt, working: false, badgeText: "대기", badgeColor: ""};
+}
+
+// 노드 상태 표시(작업 중 / 대기 / 동의 / 이견 ...)
+function setBadge(id, text, color) {
+  const n = nodeEls[id]; if (!n) return;
+  n.badgeText = text; n.badgeColor = color || ""; renderNode(id);
+}
+function renderNode(id) {
+  const n = nodeEls[id]; if (!n) return;
+  n.g.classList.toggle("working", n.working);
+  n.bt.textContent = n.working ? "작업 중" : n.badgeText;
+  n.badge.style.setProperty("--bc", n.working ? NODES[id].color : (n.badgeColor || ""));
+}
+
+// from → to 곡선. 진행 방향 왼쪽으로 휘므로 반대로 가는 선은 자동으로 반대쪽으로 휘어 겹치지 않는다
+function edgeGeometry(from, to) {
+  const a = NODES[from], b = NODES[to];
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+  const c = {x: mx + (-dy / len) * 64, y: my + (dx / len) * 64};  // 곡선의 제어점
+  const unit = (p, q) => { const d = Math.hypot(q.x - p.x, q.y - p.y); return {x: (q.x - p.x) / d, y: (q.y - p.y) / d}; };
+  const u1 = unit(a, c), u2 = unit(b, c);
+  const s = {x: a.x + u1.x * (R + 4), y: a.y + u1.y * (R + 4)};   // 노드 테두리에서 시작
+  const e = {x: b.x + u2.x * (R + 9), y: b.y + u2.y * (R + 9)};   // 화살표 머리가 보이도록 조금 앞에서 끝
+  const mid = {x: s.x * .25 + c.x * .5 + e.x * .25, y: s.y * .25 + c.y * .5 + e.y * .25};
+  return {d: `M${s.x},${s.y} Q${c.x},${c.y} ${e.x},${e.y}`, mid};
+}
+
+// 엣지를 "지금 메시지가 흐르는 중" 으로 만든다. ms 가 있으면 그 시간 뒤 자동으로 흐림 처리
+function live(from, to, kind, label, ms) {
+  if (!NODES[from] || !NODES[to]) return;   // 삭제된 Agent 의 메시지는 그리지 않는다
+  const key = from + ">" + to;
+  let e = edges.get(key);
+  if (!e) {
+    const geo = edgeGeometry(from, to);
+    const path = el("path", {class: "edge", d: geo.d}, gEdges);
+    const lg = el("g", {class: "elabel", transform: `translate(${geo.mid.x},${geo.mid.y})`}, gLabels);
+    const rect = el("rect", {rx: 8, height: 16, y: -8}, lg);
+    const text = el("text", {}, lg);
+    const particles = reduced ? [] : [0, 1, 2].map(() => el("circle", {class: "particle", r: 3.5, opacity: 0}, gParticles));
+    e = {key, path, lg, rect, text, particles, isLive: false, until: 0};
+    edges.set(key, e);
+  }
+  const color = KIND[kind];
+  e.path.setAttribute("stroke", color); e.path.style.color = color;
+  e.path.setAttribute("marker-end", `url(#arrow-${kind})`);
+  e.lg.style.setProperty("--c", color);
+  e.text.textContent = label;
+  const w = label.length * 11 + 14;           // 이름표 가로 길이(글자 수로 대략 계산)
+  e.rect.setAttribute("width", w); e.rect.setAttribute("x", -w / 2);
+  e.particles.forEach((p) => { p.setAttribute("fill", color); p.style.color = color; });
+  e.isLive = true; e.until = ms ? performance.now() + ms : 0;
+  e.path.classList.add("live"); e.lg.classList.add("live");
+}
+// 흐름을 멈추고 흐릿한 "지나간 흔적" 으로 남긴다
+function settle(from, to) {
+  const e = edges.get(from + ">" + to);
+  if (!e) return;
+  e.isLive = false; e.until = 0;
+  e.path.classList.remove("live"); e.lg.classList.remove("live");
+  e.particles.forEach((p) => p.setAttribute("opacity", 0));
+}
+function settleAll() { edges.forEach((e) => settle(...e.key.split(">"))); }
+
+// 화면을 계속 갱신: 엣지 위를 달리는 빛 알갱이 + 시간이 다 된 엣지 정리
+function frame(now) {
+  edges.forEach((e) => {
+    if (e.isLive && e.until && now > e.until) { settle(...e.key.split(">")); recomputeWorking(); return; }
+    if (!e.isLive) return;
+    const len = e.path.getTotalLength();
+    e.particles.forEach((p, i) => {
+      const t = ((now / 1100) + i / e.particles.length) % 1;
+      const pt = e.path.getPointAtLength(t * len);
+      p.setAttribute("cx", pt.x); p.setAttribute("cy", pt.y);
+      p.setAttribute("opacity", Math.sin(t * Math.PI));  // 양 끝에서는 흐릿하게
+    });
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ----- 어떤 노드가 "작업 중" 인지 -----
+let serverActive = [];  // 서버가 알려준 현재 동작 중 Agent
+function recomputeWorking() {
+  const working = new Set(serverActive);
+  edges.forEach((e) => {
+    if (!e.isLive || e.until) return;     // 시간 제한이 있는 엣지(= 결과 전달) 는 제외
+    working.add(e.key.split(">")[1]);     // Full-Mesh: 누가 보냈든 요청을 받은 Agent 는 작업 중
+  });
+  for (const id in nodeEls) { nodeEls[id].working = working.has(id); renderNode(id); }
+}
+
+// 그래프를 처음 상태로 (새 질문 / 사건 전환 시)
+let stats = {agree: 0, dissent: 0}, meshMsgs = 0, evCount = 0;
+function resetGraph() {
+  settleAll();
+  edges.forEach((e) => { e.path.remove(); e.lg.remove(); e.particles.forEach((p) => p.remove()); });
+  edges.clear(); serverActive = [];
+  for (const id in nodeEls) { nodeEls[id].working = false; setBadge(id, "대기", ""); }
+  setRound("대기", "");
+  stats = {agree: 0, dissent: 0}; meshMsgs = 0; evCount = 0; $("evVal").textContent = 0; updateStats();
+  ticker("READY", "질문을 입력하면 Agent들의 협의 과정이 위 그래프에 그려집니다.");
+}
+function updateStats() {
+  $("agreeVal").textContent = stats.agree; $("dissentVal").textContent = stats.dissent; $("meshVal").textContent = meshMsgs;
+}
+function setRound(text, cls) { $("roundVal").textContent = text; $("chipRound").className = "chip " + (cls || ""); }
+function ticker(who, text) {
+  const color = (NODES[who] || {}).color || "#64748b";
+  $("tickWho").textContent = who; $("tickWho").style.setProperty("--c", color);
+  $("tickTxt").textContent = text;
+}
+
+// 서버의 Tool 이름(legal_review 등) → Agent 이름. 이름을 소문자로 줄여서 비교한다
+const norm = (s) => s.toLowerCase().replace(/review|[^a-z0-9]/g, "");
+function toolToAgent(tool) { const a = experts().find((x) => norm(x.name) === norm(tool)); return a && a.name; }
+
+// ----- 서버 로그 한 줄을 읽고 그래프를 움직인다 -----
+function handleStatus(ev) {
+  const log = ev.log || "";
+  serverActive = [].concat(ev.active || []);
+  evCount++; $("evVal").textContent = evCount;
+  let m;
+
+  // 1) 서버가 직접 알려 준 "Agent ↔ Agent" 메시지 (호출 / 피드백 요청 / 동의·이견 / 결과)
+  (ev.edges || []).forEach((e) => {
+    if (e.kind === "req") {
+      live(e.from, e.to, "req", e.label);
+      setBadge(e.to, e.from === "Orchestrator" ? "호출됨" : "검토 중", KIND.req);
+    } else {
+      settle(e.to, e.from);                       // 요청했던 선은 끝
+      live(e.from, e.to, e.kind, e.label, e.kind === "result" ? 3500 : 4500);
+      setBadge(e.from, e.kind === "result" ? "완료" : e.label, KIND[e.kind]);
+      if (e.kind === "agree" || e.kind === "dissent") stats[e.kind]++;
+    }
+    if (e.from !== "Orchestrator" && e.to !== "Orchestrator") meshMsgs++;   // 전문가끼리 오간 A2A 메시지
+  });
+  // 약관 문서를 참고했다는 알림 (백엔드가 refs 를 보내면 표시)
+  (ev.refs || []).forEach((r) => { setBadge(r.agent, "📄 참조", "#fde68a"); });
+  updateStats();
+
+  // 2) Orchestrator 의 Tool 호출 / 완료 로그 (edges 가 없는 기존 로그를 위한 보조 해석)
+  if (!(ev.edges || []).length) {
+    if ((m = log.match(/^Orchestrator → Tool 호출: (\w+)/))) {
+      const to = toolToAgent(m[1]);
+      if (to) { live("Orchestrator", to, "req", "호출"); setBadge(to, "호출됨", KIND.req); }
+    } else if ((m = log.match(/^(\w+) 완료 → Orchestrator/))) {
+      const from = toolToAgent(m[1]);
+      if (from) { settle("Orchestrator", from); live(from, "Orchestrator", "result", "결과", 3500); setBadge(from, "완료", KIND.result); }
+    } else if ((m = log.match(/^(\w+): 초안/))) {
+      setBadge(m[1], "발의", KIND.req);              // 이번 협의를 시작한 전문가
+    } else if (/수정 중/.test(log)) {
+      const init = serverActive[0];                   // 피드백을 받은 발의자가 의견을 고친다 → 응답선 정리
+      EXPERTS.forEach((n) => settle(n, init));
+    }
+  }
+  const r = log.match(/\[조율 (\d)\/(\d)\]/);
+  if (r) setRound(`조율 ${r[1]}/${r[2]}`, "run");
+  if (/모두 동의/.test(log)) setRound("합의 도달 ✓", "ok");
+  else if (/최대 조율/.test(log)) setRound("이견 남음", "warn");
+  ticker(serverActive[0] || (log === "완료" ? "Orchestrator" : "SYSTEM"), log);
+  recomputeWorking();
+}
+
+// 사건의 이벤트 하나를 그래프에 반영 (실시간/되감기 공통)
+function applyEvent(ev) {
+  if (ev.type === "ask") {
+    live("User", "Orchestrator", "req", "질문", 2500);
+    setBadge("User", "질문함", KIND.req);
+    ticker("User", ev.text);
+  } else if (ev.type === "status") {
+    handleStatus(ev);
+  } else if (ev.type === "reply") {
+    live("Orchestrator", "User", "result", "최종 답변", 5000);   // 결론이 사용자에게 돌아간다
+    setBadge("User", "답변 받음", KIND.agree);
+    ticker("Orchestrator", "최종 답변을 전달했습니다.");
+  }
+}
+
+/* =====================================================================
+   3) 사건(대화) 관리 — 하나의 대화 = 하나의 사건
+   - 사건마다 고유한 case_id 를 쓰므로 Agent 기억도 사건별로 분리된다
+   - 목록·상태는 화면 메모리에만 둔다 (CLAUDE.md: 새로고침하면 기억 초기화)
+   ===================================================================== */
+const STATUS = {"진행 중": "#38bdf8", "완료": "#4ade80", "보류": "#fbbf24"};
+const MAX_CASES = 20;   // 서버 기억 정리 한도(MAX_CASES)와 맞춘다
+let cases = [], current = null, filter = "전체";
+
+function newCase() {
+  if (current && !current.messages.length && !current.running) return selectCase(current.id);   // 빈 대화가 이미 있으면 재사용
+  if (cases.length >= MAX_CASES) {
+    const old = [...cases].reverse().find((c) => !c.running);
+    if (!old) return toast("진행 중인 사건이 너무 많습니다");
+    removeCase(old.id, true);
+  }
+  const c = {id: uuid(), title: "새 사건", status: "진행 중", messages: [], logs: [], events: [], running: false, t0: 0, t1: 0, asks: 0, createdAt: Date.now()};
+  cases.unshift(c);
+  selectCase(c.id);
+  $("msg").focus();
+}
+function selectCase(id) {
+  current = cases.find((c) => c.id === id);
+  if (filter !== "전체" && current.status !== filter) filter = "전체";
+  renderCases(); renderHead(); renderChat(); renderLogs(); renderGraph(); updateTimer(); updateInput();
+}
+function removeCase(id, silent) {
+  const c = cases.find((x) => x.id === id);
+  if (!c || c.running) return;
+  navigator.sendBeacon("/cases/" + id + "/end");          // 서버의 이 사건 Agent 기억도 지운다
+  cases = cases.filter((x) => x !== c);
+  if (current === c) { current = null; if (cases.length) selectCase(cases[0].id); else if (!silent) newCase(); }
+  else renderCases();
+}
+function setStatus(c, s) { c.status = s; renderCases(); renderHead(); renderChat(); }
+
+// 왼쪽 사건 목록
+function renderCases() {
+  $("caseCount").textContent = cases.length ? `(${cases.length})` : "";
+  const f = $("filters"); f.replaceChildren();
+  ["전체", ...Object.keys(STATUS)].forEach((s) => {
+    const n = s === "전체" ? cases.length : cases.filter((c) => c.status === s).length;
+    f.append(h("button", {class: "fchip sm" + (filter === s ? " on" : ""), onclick: () => { filter = s; renderCases(); }}, `${s} ${n}`));
+  });
+  const list = $("caseList"); list.replaceChildren();
+  const shown = cases.filter((c) => filter === "전체" || c.status === filter);
+  if (!shown.length) list.append(h("div", {class: "empty"}, "해당하는 사건이 없습니다"));
+  shown.forEach((c) => {
+    const meta = (c.running ? "협의 중 · " : "") + c.status + " · 질문 " + c.asks;
+    list.append(h("div", {class: "case" + (c === current ? " on" : "") + (c.running ? " running" : ""), onclick: () => selectCase(c.id), title: c.title},
+      h("span", {class: "dot", style: `--c:${STATUS[c.status]}`}),
+      h("div", {class: "info"}, h("div", {class: "ct"}, c.title), h("div", {class: "cm"}, meta)),
+      h("button", {class: "x danger", title: "사건 삭제", disabled: c.running ? "" : null, onclick: (e) => { e.stopPropagation(); removeCase(c.id); }}, "✕")));
+  });
+}
+function renderHead() {
+  $("caseTitle").textContent = "💬 " + current.title;
+  const chip = $("caseChip"); chip.textContent = current.status; chip.style.setProperty("--c", STATUS[current.status]);
+}
+
+// 채팅창: 가장 최근 AI 결론 아래에 "처리 상태" 선택(진행 중 / 완료 / 보류)을 붙인다
+function renderChat() {
+  const box = $("chat"); box.replaceChildren();
+  const c = current;
+  if (!c.messages.length) {
+    box.append(h("div", {class: "empty"}, "보험 사고 상황을 입력해 보세요.", h("br"), "이 대화가 하나의 사건이 되고, Agent들이 이 사건만 기억합니다."));
+    return;
+  }
+  const lastBot = c.messages.map((m) => m.kind).lastIndexOf("bot");
+  c.messages.forEach((m, i) => {
+    const bubble = h("div", {class: "msg " + m.kind}, h("span", {class: "who"}, m.who), m.text);
+    if (i === lastBot && m.conclusion) {
+      bubble.append(h("div", {class: "statusbar"}, h("span", {}, "이 결론의 처리 상태"),
+        Object.keys(STATUS).map((s) => h("button", {class: "sbtn" + (c.status === s ? " on" : ""), style: `--c:${STATUS[s]}`, onclick: () => setStatus(c, s)}, s))));
+    }
+    box.append(bubble);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+function renderLogs() {
+  const log = $("log"); log.replaceChildren();
+  current.logs.forEach((l) => log.append(h("div", l.sep ? {class: "sep"} : {}, l.text)));
+  $("logBox").scrollTop = $("logBox").scrollHeight;
+}
+// 그래프를 이 사건의 마지막 협의 상태로 되돌린다 (사건을 바꿀 때)
+function renderGraph() {
+  resetGraph();
+  current.events.forEach(applyEvent);
+  if (!current.running) { settleAll(); serverActive = []; }
+  recomputeWorking();
+}
+
+// ----- 경과 시간 / 입력창 상태 -----
+function updateTimer() {
+  const c = current; if (!c) return;
+  const ms = c.running ? Date.now() - c.t0 : (c.t1 ? c.t1 - c.t0 : 0);
+  const s = Math.floor(ms / 1000);
+  $("timeVal").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  $("liveDot").classList.toggle("on", c.running);
+  $("liveText").textContent = c.running ? "협의 진행 중" : "대기 중";
+}
+setInterval(updateTimer, 250);
+function updateInput() {
+  $("send").disabled = current.running; $("msg").disabled = current.running;
+  $("msg").placeholder = current.running ? "Agent들이 협의 중입니다..." : "사고·계약·고객 상황을 입력하세요";
+}
+
+async function send() {
+  const c = current, text = $("msg").value.trim();
+  if (!text || c.running) return;
+  $("msg").value = "";
+  if (!c.asks) c.title = text.length > 26 ? text.slice(0, 26) + "…" : text;   // 첫 질문이 사건 제목
+  c.asks++; c.running = true; c.t0 = Date.now(); c.t1 = 0; c.events = [];
+  if (c.logs.length) c.logs.push({sep: true, text: "─── 새 질문 ───"});
+  c.messages.push({kind: "me", who: "나", text});
+  const ask = {type: "ask", text}; c.events.push(ask);
+  renderCases(); renderHead(); renderChat(); renderLogs(); resetGraph(); applyEvent(ask); updateTimer(); updateInput();
+
+  try {
+    // 서버가 한 줄씩 보내주는 JSON 을 읽으면서 화면을 갱신한다 (이전 대화는 서버의 사건별 Agent 기억에 있다)
+    const res = await fetch("/chat", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({case_id: c.id, message: text})});
+    const reader = res.body.getReader(), decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, {stream: true});
+      const lines = buf.split("\n");
+      buf = lines.pop();  // 아직 덜 온 줄은 남겨 둔다
+      for (const l of lines.filter(Boolean)) {
+        const ev = JSON.parse(l);
+        c.events.push(ev);
+        if (ev.type === "status") c.logs.push({text: ev.log});
+        else if (ev.type === "reply") c.messages.push({kind: "bot", who: "답변", text: ev.text, conclusion: true});
+        if (c === current) {   // 지금 보고 있는 사건이면 화면에도 바로 반영
+          applyEvent(ev);
+          if (ev.type === "status") { const d = h("div", {}, ev.log); $("log").append(d); $("logBox").scrollTop = $("logBox").scrollHeight; }
+          else if (ev.type === "reply") renderChat();
+        }
+      }
+    }
+  } catch (err) {
+    c.messages.push({kind: "bot", who: "오류", text: "요청에 실패했습니다: " + err.message});
+  } finally {
+    c.running = false; c.t1 = Date.now();
+    if (c === current) { settleAll(); serverActive = []; recomputeWorking(); renderChat(); updateInput(); $("msg").focus(); }
+    renderCases(); updateTimer();
+  }
+}
+$("send").onclick = send;
+$("msg").onkeydown = (e) => { if (e.key === "Enter" && !e.isComposing) send(); };
+$("newCase").onclick = newCase;
+// 페이지를 닫거나 새로고침할 때 모든 사건의 서버 기억을 바로 지운다
+window.addEventListener("pagehide", () => cases.forEach((c) => navigator.sendBeacon("/cases/" + c.id + "/end")));
+
+/* =====================================================================
+   4) Agent 관리 탭 — 역할 / 추가 / 수정 / 삭제, 약관 문서 업로드·연결
+   ===================================================================== */
+const ICONS = ["⚖️", "📊", "🤝", "🧑‍💼", "🏥", "🔍", "🧠", "🛡️", "📚", "💼", "🧾", "🩺", "🚗", "🏠", "💡", "🕵️"];
+const COLORS = ["#38bdf8", "#fbbf24", "#34d399", "#a78bfa", "#f472b6", "#fb923c", "#22d3ee", "#a3e635"];
+
+function renderAgents() {
+  const grid = $("agentGrid"); grid.replaceChildren();
+  state.agents.forEach((a) => {
+    const linked = state.docs.filter((d) => d.agents.includes(a.name));
+    grid.append(h("div", {class: "acard", style: `--c:${a.color}`},
+      h("div", {class: "top"}, h("div", {class: "avatar"}, a.icon),
+        h("div", {}, h("b", {}, a.name), h("div", {class: "role"}, a.role))),
+      h("div", {}, h("span", {class: "tag base"}, a.kind === "orchestrator" ? "심사팀장 · 조율" : "전문가 · Full-Mesh"), " ",
+        linked.length ? h("span", {class: "tag doc", title: linked.map((d) => d.name).join("\n")}, `📄 약관 ${linked.length}`) : null),
+      h("div", {class: "desc"}, a.prompt || "역할 지침이 없습니다."),
+      h("div", {class: "btns"},
+        h("button", {class: "sm", onclick: () => openAgentDlg(a)}, "수정"),
+        h("button", {class: "sm danger", disabled: canDelete(a) ? null : "", title: canDelete(a) ? "" : deleteBlockReason(a), onclick: () => askDeleteAgent(a)}, "삭제"))));
+  });
+  if (experts().length < MAX_EXPERTS) {
+    grid.append(h("div", {class: "acard addcard", onclick: () => openAgentDlg(null)}, h("div", {class: "plus"}, "＋"), "전문가 Agent 추가", h("small", {}, "자동으로 Full-Mesh 에 참여")));
+  }
+  drawMini();
+}
+const canDelete = (a) => a.kind !== "orchestrator" && experts().length > MIN_EXPERTS;
+const deleteBlockReason = (a) => a.kind === "orchestrator" ? "Orchestrator 는 삭제할 수 없습니다" : `Full-Mesh 는 전문가 ${MIN_EXPERTS}명 이상 필요합니다`;
+
+// 아래쪽 작은 Full-Mesh 미리보기: 전문가가 서로 모두 이어진 모습
+function drawMini() {
+  const s = $("miniMesh"); s.replaceChildren();
+  const ex = experts(), orch = state.agents.find((a) => a.kind === "orchestrator");
+  const pos = {};
+  ex.forEach((a, i) => { const ang = -Math.PI / 2 + (2 * Math.PI * i) / ex.length; pos[a.name] = {x: 360 + 150 * Math.cos(ang), y: 100 + 52 * Math.sin(ang)}; });
+  ex.forEach((a, i) => ex.slice(i + 1).forEach((b) => el("line", {x1: pos[a.name].x, y1: pos[a.name].y, x2: pos[b.name].x, y2: pos[b.name].y, stroke: "#4b5d86", "stroke-width": 1.5, "stroke-dasharray": "4 5"}, s)));
+  const node = (x, y, icon, color, label) => {
+    el("circle", {cx: x, cy: y, r: 20, fill: "#0b1426", stroke: color, "stroke-width": 2}, s);
+    const t = el("text", {x, y, "font-size": 20, "text-anchor": "middle", "dominant-baseline": "central"}, s); t.textContent = icon;
+    const l = el("text", {x, y: y + 34, "font-size": 11, fill: "#cbd5e1", "text-anchor": "middle"}, s); l.textContent = label;
+  };
+  if (orch) { node(80, 100, orch.icon, orch.color, orch.name); el("line", {x1: 100, y1: 100, x2: 360 - 150 - 22, y2: 100, stroke: "#3b4a6b", "stroke-dasharray": "2 6"}, s); }
+  ex.forEach((a) => node(pos[a.name].x, pos[a.name].y, a.icon, a.color, a.name));
+  const t = el("text", {x: 590, y: 100, "font-size": 12, fill: "#7f92bb", "text-anchor": "middle", "font-weight": 800, "letter-spacing": 2}, s); t.textContent = "FULL-MESH";
+}
+
+// ----- Agent 추가/수정 모달 -----
+let editing = null, pickedIcon = ICONS[0], pickedColor = COLORS[0];
+function openAgentDlg(a) {
+  editing = a;
+  $("agentDlgTitle").textContent = a ? `Agent 수정 — ${a.name}` : "Agent 추가";
+  $("fName").value = a ? a.name : ""; $("fName").disabled = !!a;
+  $("fRole").value = a ? a.role : ""; $("fPrompt").value = a ? a.prompt || "" : "";
+  pickedIcon = a ? a.icon : ICONS[(experts().length + 3) % ICONS.length];
+  pickedColor = a ? a.color : COLORS.find((c) => !state.agents.some((x) => x.color === c)) || COLORS[0];
+  renderPickers(); $("agentErr").textContent = "";
+  $("agentDlg").showModal();
+}
+function renderPickers() {
+  $("fIcons").replaceChildren(...ICONS.map((i) => h("button", {type: "button", class: i === pickedIcon ? "on" : "", onclick: () => { pickedIcon = i; renderPickers(); }}, i)));
+  $("fColors").replaceChildren(...COLORS.map((c) => h("button", {type: "button", style: `--c:${c}`, class: c === pickedColor ? "on" : "", onclick: () => { pickedColor = c; renderPickers(); }})));
+}
+$("agentCancel").onclick = () => $("agentDlg").close();
+$("agentSave").onclick = async () => {
+  const name = $("fName").value.trim(), role = $("fRole").value.trim(), prompt = $("fPrompt").value.trim();
+  const err = (m) => { $("agentErr").textContent = m; };
+  if (!editing) {
+    if (!/^[A-Za-z][A-Za-z0-9]{1,23}$/.test(name)) return err("이름은 영문으로 시작하는 영문·숫자 2~24자여야 합니다.");
+    if (state.agents.some((a) => a.name.toLowerCase() === name.toLowerCase()) || name === "User") return err("이미 있는 이름입니다.");
+  }
+  if (!role) return err("역할 이름을 입력하세요.");
+  $("agentSave").disabled = true;
+  try {
+    await store.saveAgent({name: editing ? editing.name : name, role, prompt, icon: pickedIcon, color: pickedColor}, !editing);
+    $("agentDlg").close(); toast(editing ? "Agent 를 수정했습니다" : "Agent 를 추가했습니다 — 자동으로 Full-Mesh 에 연결됩니다");
+    refreshAfterAgentChange();
+  } catch (e) { err("저장 실패: " + e.message); }
+  $("agentSave").disabled = false;
+};
+
+// ----- 삭제 확인 -----
+let onConfirm = null;
+function confirmDlg(title, text, fn) { $("confirmTitle").textContent = title; $("confirmText").textContent = text; onConfirm = fn; $("confirmDlg").showModal(); }
+$("confirmNo").onclick = () => $("confirmDlg").close();
+$("confirmYes").onclick = async () => {
+  $("confirmDlg").close();
+  try { await onConfirm(); } catch (e) { toast("실패: " + e.message); }
+};
+function askDeleteAgent(a) {
+  confirmDlg(`${a.name} (${a.role}) 삭제`, "이 Agent 가 Full-Mesh 에서 빠지고, 연결된 약관 문서와의 연결도 해제됩니다. 이미 진행한 사건의 기억에는 영향이 없습니다.",
+    async () => { await store.deleteAgent(a.name); toast("Agent 를 삭제했습니다"); refreshAfterAgentChange(); });
+}
+// Agent 가 바뀌면: 목록, 약관 연결 화면, 협의 그래프를 모두 다시 그린다
+function refreshAfterAgentChange() {
+  renderAgents(); renderDocs(); buildGraph(); if (current) renderGraph();
+}
+
+// ----- 약관 문서 -----
+const EXT_OK = /\.(txt|md|pdf|docx)$/i, MAX_BYTES = 5 * 1024 * 1024;
+function renderDocs() {
+  const list = $("docList"); list.replaceChildren();
+  if (!state.docs.length) list.append(h("div", {class: "empty"}, "아직 업로드한 약관이 없습니다.", h("br"), "업로드하면 선택한 Agent 가 답변할 때 이 문서를 참고합니다."));
+  state.docs.forEach((d) => {
+    list.append(h("div", {class: "doc"},
+      h("div", {class: "dh"}, "📄", h("div", {class: "dn", title: d.name}, d.name),
+        h("button", {class: "sm danger", onclick: () => confirmDlg("약관 문서 삭제", `"${d.name}" 을(를) 삭제합니다. 연결된 Agent 는 더 이상 이 문서를 참고하지 못합니다.`, async () => { await store.deleteDoc(d.id); toast("약관을 삭제했습니다"); renderDocs(); renderAgents(); })}, "삭제")),
+      h("div", {class: "dm"}, `${d.name.split(".").pop().toUpperCase()} · ${fmtSize(d.size || 0)} · 연결 Agent ${d.agents.length}명`),
+      d.preview ? h("div", {class: "prev"}, d.preview) : null,
+      h("div", {class: "link-label"}, "참고할 Agent (눌러서 연결/해제)"),
+      h("div", {class: "chips"}, state.agents.map((a) => h("button", {
+        class: "lchip sm" + (d.agents.includes(a.name) ? " on" : ""), style: `--c:${a.color}`, title: a.role,
+        onclick: async () => {
+          const next = d.agents.includes(a.name) ? d.agents.filter((n) => n !== a.name) : [...d.agents, a.name];
+          try { await store.linkDoc(d, next); renderDocs(); renderAgents(); } catch (e) { toast("연결 실패: " + e.message); }
+        }}, `${a.icon} ${a.name}`)))));
+  });
+}
+let pendingFile = null;
+function openDocDlg(file) {
+  $("docFile").value = ""; $("docErr").textContent = ""; pendingFile = file || null;
+  const picked = new Set(experts().map((a) => a.name));   // 기본은 전문가 전원 선택
+  const draw = () => $("docAgents").replaceChildren(...state.agents.map((a) => h("button", {type: "button", class: "lchip" + (picked.has(a.name) ? " on" : ""), style: `--c:${a.color}`,
+    onclick: () => { picked.has(a.name) ? picked.delete(a.name) : picked.add(a.name); draw(); }}, `${a.icon} ${a.name}`)));
+  draw(); $("docDlg")._picked = picked;
+  if (file) $("docErr").textContent = "선택한 파일: " + file.name;
+  $("docDlg").showModal();
+}
+$("addDoc").onclick = () => openDocDlg();
+$("dropzone").onclick = () => openDocDlg();
+$("dropzone").ondragover = (e) => { e.preventDefault(); $("dropzone").classList.add("over"); };
+$("dropzone").ondragleave = () => $("dropzone").classList.remove("over");
+$("dropzone").ondrop = (e) => { e.preventDefault(); $("dropzone").classList.remove("over"); if (e.dataTransfer.files[0]) openDocDlg(e.dataTransfer.files[0]); };
+$("docCancel").onclick = () => $("docDlg").close();
+$("docSave").onclick = async () => {
+  const file = $("docFile").files[0] || pendingFile, err = (m) => { $("docErr").textContent = m; };
+  if (!file) return err("파일을 선택하세요.");
+  if (!EXT_OK.test(file.name)) return err(".txt .md .pdf .docx 파일만 올릴 수 있습니다.");
+  if (file.size > MAX_BYTES) return err("파일이 5MB 를 넘습니다.");
+  const picked = [...$("docDlg")._picked];
+  if (!picked.length) return err("참고할 Agent 를 한 명 이상 선택하세요.");
+  $("docSave").disabled = true;
+  try { await store.uploadDoc(file, picked); $("docDlg").close(); toast("약관을 업로드하고 Agent 에 연결했습니다"); renderDocs(); renderAgents(); }
+  catch (e) { err("업로드 실패: " + e.message); }
+  $("docSave").disabled = false;
+};
+
+// ----- 탭 전환 -----
+function showTab(name) {
+  $("viewChat").hidden = name !== "chat"; $("viewAgents").hidden = name !== "agents";
+  $("tabChat").classList.toggle("on", name === "chat"); $("tabAgents").classList.toggle("on", name === "agents");
+  if (name === "agents") { renderAgents(); renderDocs(); }
+}
+$("tabChat").onclick = () => showTab("chat");
+$("tabAgents").onclick = () => showTab("agents");
+$("addAgent").onclick = () => openAgentDlg(null);
+
+// ----- 시작 -----
+(async function start() {
+  await store.init();
+  buildGraph();
+  newCase();
+})();
+</script>
+</body>
+</html>
